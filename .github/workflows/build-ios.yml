@@ -24,7 +24,7 @@ jobs:
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Release \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath ./build \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" \
