@@ -18,30 +18,24 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: List available simulators
-        run: xcrun simctl list devices available | head -20
-
       - name: Build
-        shell: bash
+        shell: zsh
         run: |
-          set -o pipefail
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./DerivedData \
-            build 2>&1 | tee build.log
-          echo "Build exit: ${PIPESTATUS[0]}"
+            build | tee build.log; return $pipestatus[1]
 
       - name: Show build errors
         if: always()
-        shell: bash
         run: |
           echo "=== ERRORS ==="
           grep -i "error:" build.log 2>/dev/null | head -50 || echo "No error: lines"
           echo "=== TAIL ==="
-          tail -50 build.log 2>/dev/null || echo "No build.log"
+          tail -80 build.log 2>/dev/null || echo "No build.log"
 
       - name: Upload Build Log
         uses: actions/upload-artifact@v4
