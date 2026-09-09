@@ -1,0 +1,77 @@
+name: ApexGameOptimizer
+options:
+  bundleIdPrefix: com.apexgame
+  deploymentTarget:
+    iOS: "14.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    CPLUSPLUS_STANDARD: "c++20"
+    CLANG_CXX_LANGUAGE_STANDARD: "c++20"
+    CLANG_CXX_LIBRARY: "libc++"
+    GCC_PREPROCESSOR_DEFINITIONS:
+      - "NATIVE_LAYER=1"
+    TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  ApexGameOptimizer:
+    type: application
+    platform: iOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: ApexGameOptimizer
+        excludes:
+          - "**/*.xcassets"
+      - path: Native/src
+        type: group
+      - path: Native
+        excludes:
+          - "src/**"
+        type: group
+    resources:
+      - path: ApexGameOptimizer/Resources
+    settings:
+      base:
+        INFOPLIST_FILE: ApexGameOptimizer/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.apexgame.optimizer
+        MARKETING_VERSION: "3.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_OBJC_BRIDGING_HEADER: "ApexGameOptimizer/Native/ApexGameOptimizer-Bridging-Header.h"
+        OTHER_LDFLAGS:
+          - "-lc++"
+        HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Native"
+          - "$(SRCROOT)/src"
+    dependencies: []
+    scheme:
+      testTargets: []
+    preBuildScripts: []
+    postBuildScripts: []
+
+schemes:
+  ApexGameOptimizer:
+    build:
+      targets:
+        ApexGameOptimizer: all
+      parallelizableBuild: true
+    run:
+      config: Debug
+      environmentVariables: []
+    test:
+      config: Debug
+      targets:
+        - ApexGameOptimizer
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

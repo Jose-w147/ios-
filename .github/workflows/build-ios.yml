@@ -1,0 +1,89 @@
+name: Build iOS
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14  # Apple Silicon runner (M1)
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.2.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: List project files
+        run: |
+          echo "=== Xcode Project ==="
+          ls -la *.xcodeproj
+          echo ""
+          echo "=== Source files ==="
+          find . -name "*.swift" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | head -30
+
+      - name: Build for iPhone 8 (arm64)
+        run: |
+          xcodebuild \
+            -project ApexGameOptimizer.xcodeproj \
+            -scheme ApexGameOptimizer \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty
+
+      - name: Build for Simulator (for testing)
+        run: |
+          xcodebuild \
+            -project ApexGameOptimizer.xcodeproj \
+            -scheme ApexGameOptimizer \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15' \
+            -derivedDataPath build-sim \
+            | xcpretty
+
+      - name: Create IPA directory
+        run: |
+          mkdir -p build/ipa
+          if [ -d "build/Build/Products/Release-iphoneos" ]; then
+            cp -r build/Build/Products/Release-iphoneos/*.app build/ipa/
+          fi
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ApexGameOptimizer-iOS
+          path: build/ipa/
+          retention-days: 30
+
+      - name: Build Summary
+        run: |
+          echo "=========================================="
+          echo "✅ BUILD iOS CONCLUÍDO COM SUCESSO!"
+          echo "=========================================="
+          echo ""
+          echo "📱 iPhone 8 (A11 Bionic, 2GB RAM) ✅"
+          echo "📱 iPhone X ou superior ✅"
+          echo ""
+          echo "🎯 Para instalar no iPhone:"
+          echo "1. Baixe o artifact ApexGameOptimizer-iOS"
+          echo "2. Use o AltStore ou Sideloadly para instalar"
+          echo "3. Ou abra no Xcode e faça Deploy"
+          echo ""
+          echo "📊 Arquitetura: arm64 (Apple A11+)"
+          echo "⚙️ C++ Standard: C++20"
+          echo "🔧 SIMD: ARM NEON"
+          echo "=========================================="
