@@ -18,38 +18,7 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build for Device (Release)
-        id: build_device
-        run: |
-          xcodebuild \
-            -project ApexGameOptimizer.xcodeproj \
-            -scheme ApexGameOptimizer \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath ./DerivedData \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" 2>&1 | tee build_device.log
-          
-          echo "=== BUILT_PRODUCTS_DIR ==="
-          grep "BUILT_PRODUCTS_DIR" build_device.log | tail -1 || true
-          
-          echo "=== Build folder tree ==="
-          find ./DerivedData/Build -maxdepth 4 -type d 2>/dev/null || true
-          
-          echo "=== All .app files ==="
-          find ./DerivedData -name "*.app" 2>/dev/null || true
-          
-          echo "=== All .ipa files ==="
-          find ./DerivedData -name "*.ipa" 2>/dev/null || true
-          
-          echo "=== All Products ==="
-          find ./DerivedData/Build/Products -type f 2>/dev/null | head -30 || true
-
       - name: Build for Simulator
-        id: build_sim
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
@@ -58,60 +27,39 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
             -derivedDataPath ./DerivedDataSim \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" 2>&1 | tee build_sim.log
-          
-          echo "=== BUILT_PRODUCTS_DIR ==="
-          grep "BUILT_PRODUCTS_DIR" build_sim.log | tail -1 || true
-          
-          echo "=== Build folder tree ==="
-          find ./DerivedDataSim/Build -maxdepth 4 -type d 2>/dev/null || true
-          
-          echo "=== All .app files ==="
-          find ./DerivedDataSim -name "*.app" 2>/dev/null || true
-          
-          echo "=== All Products ==="
-          find ./DerivedDataSim/Build/Products -type f 2>/dev/null | head -30 || true
+            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -50
 
-      - name: Package output
+      - name: Locate .app bundle
+        run: |
+          echo "=== FULL DerivedDataSim tree ==="
+          find ./DerivedDataSim -type d -name "*.app" 2>/dev/null
+          find ./DerivedDataSim -type f -name "*.app" 2>/dev/null
+          echo "=== Build products ==="
+          find ./DerivedDataSim/Build -type f 2>/dev/null | head -50
+          echo "=== BUILT_PRODUCTS_DIR ==="
+          find ./DerivedDataSim/Build/Products -type d 2>/dev/null | head -30
+
+      - name: Package
         run: |
           mkdir -p output
-          
-          # Try device build first
-          echo "=== Looking for device .app ==="
-          find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null || true
-          DEV=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          if [ -n "$DEV" ]; then
-            cp -r "$DEV" output/
-            echo "COPIED DEVICE: $DEV"
+          # List all .app paths
+          find ./DerivedDataSim -type d -name "*.app" 2>/dev/null | while read app; do
+            echo "Found app bundle dir: $app"
+            cp -r "$app" output/
+          done
+          find ./DerivedDataSim -type f -name "*.app" 2>/dev/null | while read app; do
+            echo "Found app bundle file: $app"
+            cp "$app" output/
+          done
+          # Also try to find via Products path
+          PRODUCTS_DIR=$(find ./DerivedDataSim/Build/Products -maxdepth 1 -type d 2>/dev/null | tail -1)
+          if [ -n "$PRODUCTS_DIR" ]; then
+            echo "Products dir: $PRODUCTS_DIR"
+            ls -la "$PRODUCTS_DIR/"
+            cp -r "$PRODUCTS_DIR"/* output/ 2>/dev/null || true
           fi
-          
-          # Try simulator build
-          echo "=== Looking for simulator .app ==="
-          find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null || true
-          SIM=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          if [ -n "$SIM" ]; then
-            cp -r "$SIM" output/
-            echo "COPIED SIMULATOR: $SIM"
-          fi
-          
-          # Fallback: copy Products directory
-          echo "=== Fallback: copy Products ==="
-          find ./DerivedData/Build/Products -type f -name "*.app" 2>/dev/null || true
-          find ./DerivedDataSim/Build/Products -type f -name "*.app" 2>/dev/null || true
-          PROD=$(find ./DerivedData/Build/Products -name "*.app" 2>/dev/null | head -1 || true)
-          if [ -z "$DEV" ] && [ -n "$PROD" ]; then
-            cp -r "$PROD" output/
-            echo "COPIED FROM PRODUCTS: $PROD"
-          fi
-          PROD_SIM=$(find ./DerivedDataSim/Build/Products -name "*.app" 2>/dev/null | head -1 || true)
-          if [ -z "$SIM" ] && [ -n "$PROD_SIM" ]; then
-            cp -r "$PROD_SIM" output/
-            echo "COPIED FROM PRODUCTS SIM: $PROD_SIM"
-          fi
-          
-          echo "=== OUTPUT ==="
-          find output -type f 2>/dev/null || true
-          ls -la output/ 2>/dev/null || true
+          echo "=== Output ==="
+          ls -laR output/ 2>/dev/null
 
       - name: Upload
         uses: actions/upload-artifact@v4
