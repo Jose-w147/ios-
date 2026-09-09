@@ -16,13 +16,7 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode Project
-        run: xcodegen generate --spec project.yml 2>&1
-
-      - name: Show project structure
-        run: |
-          ls -la *.xcodeproj 2>/dev/null || echo "No xcodeproj"
-          ls -la ApexGameOptimizer/ 2>/dev/null || echo "No ApexGameOptimizer dir"
-          ls -la Native/src/ 2>/dev/null || echo "No Native/src dir"
+        run: xcodegen generate --spec project.yml
 
       - name: Build
         run: |
@@ -32,10 +26,37 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath ./DerivedData \
-            build 2>&1
+            build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+
+      - name: Upload Build Log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
+          if-no-files-found: warn
 
       - name: Find .app
         if: always()
         run: |
-          find ./DerivedData -name "*.app" 2>/dev/null || echo "No .app found"
-          find ./DerivedData/Build/Products -type d 2>/dev/null | head -20 || echo "No products dir"
+          APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "Found: $APP"
+            mkdir -p Payload
+            cp -r "$APP" Payload/
+            zip -r ApexGameOptimizer.ipa Payload/
+            ls -lh ApexGameOptimizer.ipa
+          else
+            echo "No .app found"
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ApexGameOptimizer-iOS
+          path: |
+            ApexGameOptimizer.ipa
+          retention-days: 30
+          if-no-files-found: warn
