@@ -24,39 +24,37 @@ jobs:
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath ./DerivedData \
-            build 2>&1 | tee build.log
-          echo "EXIT CODE: $?"
+            build > build.log 2>&1 || true
+          
+          if grep -q "BUILD SUCCEEDED" build.log; then
+            echo "BUILD SUCCEEDED"
+          else
+            echo "BUILD FAILED"
+            grep -i "error:" build.log | head -30
+            tail -30 build.log
+            exit 1
+          fi
 
-      - name: Debug DerivedData
-        if: always()
+      - name: Find and Package .app
         run: |
-          echo "=== DerivedData root ==="
-          ls -la ./DerivedData/ 2>/dev/null || echo "No DerivedData"
-          echo "=== Build dir ==="
-          find ./DerivedData/Build -maxdepth 3 -type d 2>/dev/null | head -30
-          echo "=== All .app files ==="
-          find ./DerivedData -name "*.app" -type d 2>/dev/null
-          echo "=== All .app bundles ==="
-          find ./DerivedData -name "*.app" 2>/dev/null
-          echo "=== Build log errors ==="
-          grep -i "error:" build.log 2>/dev/null | head -20 || echo "None"
-          echo "=== Build log warnings ==="
-          grep -i "warning:" build.log 2>/dev/null | tail -10 || echo "None"
-
-      - name: Package IPA
-        if: always()
-        run: |
+          echo "=== Searching DerivedData ==="
+          find ./DerivedData -name "*.app" -type d 2>/dev/null || true
+          
           APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
-            echo "NO .app FOUND - skipping IPA"
-            exit 0
+            echo "NO .app FOUND"
+            echo "Listing DerivedData structure:"
+            find ./DerivedData/Build/Products -type d 2>/dev/null || true
+            exit 1
           fi
+          
           echo "Found: $APP"
           mkdir -p Payload
           cp -r "$APP" Payload/
           zip -r ApexGameOptimizer.ipa Payload/
+          echo "=== IPA ==="
           ls -lh ApexGameOptimizer.ipa
 
       - name: Upload
