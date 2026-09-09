@@ -18,54 +18,47 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build for Simulator
+      - name: Build Simulator .app
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-            -derivedDataPath ./DerivedDataSim \
+            -derivedDataPath ./build \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -50
+            CLANG_CXX_LIBRARY="libc++" \
+            clean build 2>&1 | tail -30
 
-      - name: Locate .app bundle
+      - name: Find .app
         run: |
-          echo "=== FULL DerivedDataSim tree ==="
-          find ./DerivedDataSim -type d -name "*.app" 2>/dev/null
-          find ./DerivedDataSim -type f -name "*.app" 2>/dev/null
-          echo "=== Build products ==="
-          find ./DerivedDataSim/Build -type f 2>/dev/null | head -50
-          echo "=== BUILT_PRODUCTS_DIR ==="
-          find ./DerivedDataSim/Build/Products -type d 2>/dev/null | head -30
+          echo "=== Full build tree ==="
+          find ./build -name "*.app" 2>/dev/null || echo "no .app found"
+          echo "=== Products ==="
+          find ./build/Build/Products -type f 2>/dev/null | head -20 || echo "no products"
+          echo "=== All dirs ==="
+          find ./build/Build/Products -type d 2>/dev/null || echo "no dirs"
 
-      - name: Package
+      - name: Create IPA
         run: |
-          mkdir -p output
-          # List all .app paths
-          find ./DerivedDataSim -type d -name "*.app" 2>/dev/null | while read app; do
-            echo "Found app bundle dir: $app"
-            cp -r "$app" output/
-          done
-          find ./DerivedDataSim -type f -name "*.app" 2>/dev/null | while read app; do
-            echo "Found app bundle file: $app"
-            cp "$app" output/
-          done
-          # Also try to find via Products path
-          PRODUCTS_DIR=$(find ./DerivedDataSim/Build/Products -maxdepth 1 -type d 2>/dev/null | tail -1)
-          if [ -n "$PRODUCTS_DIR" ]; then
-            echo "Products dir: $PRODUCTS_DIR"
-            ls -la "$PRODUCTS_DIR/"
-            cp -r "$PRODUCTS_DIR"/* output/ 2>/dev/null || true
+          mkdir -p Payload
+          APP=$(find ./build -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1 || true)
+          if [ -n "$APP" ]; then
+            cp -r "$APP" Payload/
+            zip -r ApexGameOptimizer.ipa Payload/
+            echo "IPA CREATED: $(ls -lh ApexGameOptimizer.ipa)"
+          else
+            echo "NO .app FOUND - listing full tree:"
+            find ./build -type f 2>/dev/null | head -50
           fi
-          echo "=== Output ==="
-          ls -laR output/ 2>/dev/null
 
-      - name: Upload
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ApexGameOptimizer-iOS
-          path: output/
+          path: |
+            ApexGameOptimizer.ipa
+            Payload/
           retention-days: 30
           if-no-files-found: warn
