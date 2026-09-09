@@ -16,9 +16,15 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode Project
-        run: xcodegen generate --spec project.yml
+        run: xcodegen generate --spec project.yml 2>&1
 
-      - name: Build for Simulator
+      - name: Show project structure
+        run: |
+          ls -la *.xcodeproj 2>/dev/null || echo "No xcodeproj"
+          ls -la ApexGameOptimizer/ 2>/dev/null || echo "No ApexGameOptimizer dir"
+          ls -la Native/src/ 2>/dev/null || echo "No Native/src dir"
+
+      - name: Build
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
@@ -26,44 +32,10 @@ jobs:
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath ./DerivedData \
-            build > build.log 2>&1 || true
-          
-          if grep -q "BUILD SUCCEEDED" build.log; then
-            echo "BUILD SUCCEEDED"
-          else
-            echo "BUILD FAILED"
-            grep -i "error:" build.log | head -30
-            tail -30 build.log
-            exit 1
-          fi
+            build 2>&1
 
-      - name: Find and Package .app
-        run: |
-          echo "=== Searching DerivedData ==="
-          find ./DerivedData -name "*.app" -type d 2>/dev/null || true
-          
-          APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP" ]; then
-            echo "NO .app FOUND"
-            echo "Listing DerivedData structure:"
-            find ./DerivedData/Build/Products -type d 2>/dev/null || true
-            exit 1
-          fi
-          
-          echo "Found: $APP"
-          mkdir -p Payload
-          cp -r "$APP" Payload/
-          zip -r ApexGameOptimizer.ipa Payload/
-          echo "=== IPA ==="
-          ls -lh ApexGameOptimizer.ipa
-
-      - name: Upload
-        uses: actions/upload-artifact@v4
+      - name: Find .app
         if: always()
-        with:
-          name: ApexGameOptimizer-iOS
-          path: |
-            ApexGameOptimizer.ipa
-            build.log
-          retention-days: 30
-          if-no-files-found: warn
+        run: |
+          find ./DerivedData -name "*.app" 2>/dev/null || echo "No .app found"
+          find ./DerivedData/Build/Products -type d 2>/dev/null | head -20 || echo "No products dir"
