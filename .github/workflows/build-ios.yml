@@ -18,14 +18,8 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Show generated files
-        run: |
-          echo "=== xcodeproj ==="
-          ls -la *.xcodeproj/
-          echo "=== xcschemes ==="
-          ls -la *.xcodeproj/xcshareddata/xcschemes/ 2>/dev/null || echo "No shared schemes"
-          echo "=== Source files ==="
-          find . -name "*.swift" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | grep -v ".git" | sort
+      - name: List available simulators
+        run: xcrun simctl list devices available | head -20
 
       - name: Build
         shell: bash
@@ -35,20 +29,19 @@ jobs:
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./DerivedData \
             build 2>&1 | tee build.log
-          echo "Exit code: $?"
+          echo "Build exit: ${PIPESTATUS[0]}"
 
-      - name: Tail build log errors
+      - name: Show build errors
         if: always()
+        shell: bash
         run: |
-          echo "=== LAST 100 LINES ==="
-          tail -100 build.log 2>/dev/null || echo "No build.log"
           echo "=== ERRORS ==="
-          grep -i "error:" build.log 2>/dev/null | head -30 || echo "No errors found"
-          echo "=== FAILURES ==="
-          grep -i "failure\|failed" build.log 2>/dev/null | head -10 || echo "No failures found"
+          grep -i "error:" build.log 2>/dev/null | head -50 || echo "No error: lines"
+          echo "=== TAIL ==="
+          tail -50 build.log 2>/dev/null || echo "No build.log"
 
       - name: Upload Build Log
         uses: actions/upload-artifact@v4
@@ -59,7 +52,7 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Find .app
+      - name: Find and Package
         if: always()
         run: |
           APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
@@ -71,6 +64,7 @@ jobs:
             ls -lh ApexGameOptimizer.ipa
           else
             echo "No .app found"
+            find ./DerivedData -type d -maxdepth 5 2>/dev/null | head -30 || true
           fi
 
       - name: Upload IPA
