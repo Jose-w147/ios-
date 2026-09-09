@@ -19,7 +19,6 @@ jobs:
         run: xcodegen generate --spec project.yml
 
       - name: Build
-        shell: zsh
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
@@ -27,22 +26,25 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./DerivedData \
-            build | tee build.log; return $pipestatus[1]
+            build > build.log 2>&1 ; echo "EXIT=$?" > exit_code.txt
 
-      - name: Show build errors
+      - name: Show results
         if: always()
         run: |
+          cat exit_code.txt 2>/dev/null || echo "No exit code"
+          echo "=== LAST 100 LINES ==="
+          tail -100 build.log 2>/dev/null || echo "No build.log"
           echo "=== ERRORS ==="
           grep -i "error:" build.log 2>/dev/null | head -50 || echo "No error: lines"
-          echo "=== TAIL ==="
-          tail -80 build.log 2>/dev/null || echo "No build.log"
 
       - name: Upload Build Log
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: build-log
-          path: build.log
+          path: |
+            build.log
+            exit_code.txt
           retention-days: 7
           if-no-files-found: warn
 
