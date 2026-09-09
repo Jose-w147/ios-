@@ -18,18 +18,8 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build for Simulator (Debug)
-        run: |
-          xcodebuild \
-            -project ApexGameOptimizer.xcodeproj \
-            -scheme ApexGameOptimizer \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-            -derivedDataPath ./DerivedDataSim \
-            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
-
       - name: Build for Device (Release)
+        id: build_device
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
@@ -41,38 +31,87 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
-
-      - name: Find and Package
-        run: |
-          mkdir -p output
-          echo "=== Simulator build tree ==="
-          find ./DerivedDataSim -name "*.app" 2>/dev/null || true
-          echo "=== Device build tree ==="
+            CLANG_CXX_LIBRARY="libc++" 2>&1 | tee build_device.log
+          
+          echo "=== BUILT_PRODUCTS_DIR ==="
+          grep "BUILT_PRODUCTS_DIR" build_device.log | tail -1 || true
+          
+          echo "=== Build folder tree ==="
+          find ./DerivedData/Build -maxdepth 4 -type d 2>/dev/null || true
+          
+          echo "=== All .app files ==="
           find ./DerivedData -name "*.app" 2>/dev/null || true
           
-          # Simulator app
-          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          if [ -n "$SIM_APP" ]; then
-            cp -r "$SIM_APP" output/
-            echo "Copied simulator: $SIM_APP"
-          else
-            echo "No simulator .app found"
+          echo "=== All .ipa files ==="
+          find ./DerivedData -name "*.ipa" 2>/dev/null || true
+          
+          echo "=== All Products ==="
+          find ./DerivedData/Build/Products -type f 2>/dev/null | head -30 || true
+
+      - name: Build for Simulator
+        id: build_sim
+        run: |
+          xcodebuild \
+            -project ApexGameOptimizer.xcodeproj \
+            -scheme ApexGameOptimizer \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -derivedDataPath ./DerivedDataSim \
+            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
+            CLANG_CXX_LIBRARY="libc++" 2>&1 | tee build_sim.log
+          
+          echo "=== BUILT_PRODUCTS_DIR ==="
+          grep "BUILT_PRODUCTS_DIR" build_sim.log | tail -1 || true
+          
+          echo "=== Build folder tree ==="
+          find ./DerivedDataSim/Build -maxdepth 4 -type d 2>/dev/null || true
+          
+          echo "=== All .app files ==="
+          find ./DerivedDataSim -name "*.app" 2>/dev/null || true
+          
+          echo "=== All Products ==="
+          find ./DerivedDataSim/Build/Products -type f 2>/dev/null | head -30 || true
+
+      - name: Package output
+        run: |
+          mkdir -p output
+          
+          # Try device build first
+          echo "=== Looking for device .app ==="
+          find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null || true
+          DEV=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
+          if [ -n "$DEV" ]; then
+            cp -r "$DEV" output/
+            echo "COPIED DEVICE: $DEV"
           fi
           
-          # Device app
-          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          if [ -n "$DEV_APP" ]; then
-            mkdir -p output/device
-            cp -r "$DEV_APP" output/device/
-            echo "Copied device: $DEV_APP"
-          else
-            echo "No device .app found"
+          # Try simulator build
+          echo "=== Looking for simulator .app ==="
+          find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null || true
+          SIM=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
+          if [ -n "$SIM" ]; then
+            cp -r "$SIM" output/
+            echo "COPIED SIMULATOR: $SIM"
           fi
           
-          echo "=== Final output ==="
-          ls -la output/ 2>/dev/null || echo "output dir empty"
+          # Fallback: copy Products directory
+          echo "=== Fallback: copy Products ==="
+          find ./DerivedData/Build/Products -type f -name "*.app" 2>/dev/null || true
+          find ./DerivedDataSim/Build/Products -type f -name "*.app" 2>/dev/null || true
+          PROD=$(find ./DerivedData/Build/Products -name "*.app" 2>/dev/null | head -1 || true)
+          if [ -z "$DEV" ] && [ -n "$PROD" ]; then
+            cp -r "$PROD" output/
+            echo "COPIED FROM PRODUCTS: $PROD"
+          fi
+          PROD_SIM=$(find ./DerivedDataSim/Build/Products -name "*.app" 2>/dev/null | head -1 || true)
+          if [ -z "$SIM" ] && [ -n "$PROD_SIM" ]; then
+            cp -r "$PROD_SIM" output/
+            echo "COPIED FROM PRODUCTS SIM: $PROD_SIM"
+          fi
+          
+          echo "=== OUTPUT ==="
           find output -type f 2>/dev/null || true
+          ls -la output/ 2>/dev/null || true
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -82,24 +121,3 @@ jobs:
           path: output/
           retention-days: 30
           if-no-files-found: warn
-
-      - name: Build Summary
-        if: always()
-        run: |
-          echo "========================================"
-          echo "  APEX GAME OPTIMIZER - iOS BUILD"
-          echo "========================================"
-          echo "  Target: iPhone 8+ (arm64, A11 Bionic)"
-          echo "  C++: C++20 with ARM NEON SIMD"
-          echo "  SwiftUI: 53 native modules"
-          echo "========================================"
-          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
-          if [ -n "$SIM_APP" ]; then echo "  Simulator: OK"; else echo "  Simulator: FAIL"; fi
-          if [ -n "$DEV_APP" ]; then echo "  Device: OK"; else echo "  Device: no signing (expected)"; fi
-          echo "========================================"
-          echo "  To install on iPhone 8:"
-          echo "  1. Download artifact from Actions tab"
-          echo "  2. Open in Xcode and deploy"
-          echo "  3. Or use AltStore/Sideloadly"
-          echo "========================================"
