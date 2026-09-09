@@ -20,7 +20,6 @@ jobs:
 
       - name: Build for Simulator (Debug)
         run: |
-          set -o pipefail
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
@@ -29,11 +28,10 @@ jobs:
             -derivedDataPath ./DerivedDataSim \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" \
-            2>&1 | tail -20
+            2>&1 | tail -200
 
       - name: Build for Device (Release)
         run: |
-          set -o pipefail
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
@@ -45,7 +43,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" \
-            2>&1 | tail -20
+            2>&1 | tail -200
 
       - name: Package artifact
         if: always()
