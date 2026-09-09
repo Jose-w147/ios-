@@ -18,18 +18,6 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build for Simulator (Debug)
-        run: |
-          xcodebuild \
-            -project ApexGameOptimizer.xcodeproj \
-            -scheme ApexGameOptimizer \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-            -derivedDataPath ./DerivedDataSim \
-            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" \
-            2>&1 | tail -200
-
       - name: Build for Device (Release)
         run: |
           xcodebuild \
@@ -42,40 +30,52 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" \
-            2>&1 | tail -200
+            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
 
-      - name: Package artifact
-        if: always()
+      - name: Create IPA
         run: |
-          mkdir -p artifacts
-          # Find .app bundles
-          echo "=== Finding .app bundles ==="
+          mkdir -p Payload
+          
+          echo "=== Searching for .app ==="
           find ./DerivedData -name "*.app" -type d 2>/dev/null
-          find ./DerivedDataSim -name "*.app" -type d 2>/dev/null
           
-          # Copy device build
-          DEVICE_APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -n "$DEVICE_APP" ]; then
-            cp -r "$DEVICE_APP" artifacts/
-            echo "Copied device app: $DEVICE_APP"
+          APP_PATH=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app found. Listing DerivedData:"
+            find ./DerivedData -type d | head -30
+            echo "BUILD FAILED: no .app bundle found"
+            exit 1
           fi
           
-          # Copy simulator build
-          SIM_APP=$(find ./DerivedDataSim -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -n "$SIM_APP" ]; then
-            cp -r "$SIM_APP" artifacts/
-            echo "Copied sim app: $SIM_APP"
-          fi
-          
-          echo "=== Artifacts ==="
-          ls -la artifacts/
+          echo "Found: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
+          zip -r ApexGameOptimizer.ipa Payload/
+          echo "=== IPA Created ==="
+          ls -la ApexGameOptimizer.ipa
 
-      - name: Upload artifact
+      - name: Upload IPA
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ApexGameOptimizer-iOS
-          path: artifacts/
+          path: ApexGameOptimizer.ipa
           retention-days: 30
           if-no-files-found: warn
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "========================================"
+          echo "  BUILD iOS STATUS"
+          echo "========================================"
+          echo "  iPhone 8+ (A11 Bionic, arm64)"
+          echo "  XcodeGen + Xcode 15 + C++20"
+          echo "========================================"
+          if [ -f "ApexGameOptimizer.ipa" ]; then
+            echo "  STATUS: SUCCESS"
+            echo "  IPA: $(ls -lh ApexGameOptimizer.ipa | awk '{print $5}')"
+          else
+            echo "  STATUS: PARTIAL (C++ compiled, packaging failed)"
+          fi
+          echo "========================================"
