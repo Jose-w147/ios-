@@ -18,8 +18,9 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build for Simulator (Debug) — Full Error Log
+      - name: Build for Simulator (Debug)
         run: |
+          set -o pipefail
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
@@ -28,14 +29,55 @@ jobs:
             -derivedDataPath ./DerivedDataSim \
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" \
-            2>&1 | tail -100
+            2>&1 | tail -20
 
-      - name: Upload logs
+      - name: Build for Device (Release)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ApexGameOptimizer.xcodeproj \
+            -scheme ApexGameOptimizer \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ./DerivedData \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
+            CLANG_CXX_LIBRARY="libc++" \
+            2>&1 | tail -20
+
+      - name: Package artifact
+        if: always()
+        run: |
+          mkdir -p artifacts
+          # Find .app bundles
+          echo "=== Finding .app bundles ==="
+          find ./DerivedData -name "*.app" -type d 2>/dev/null
+          find ./DerivedDataSim -name "*.app" -type d 2>/dev/null
+          
+          # Copy device build
+          DEVICE_APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$DEVICE_APP" ]; then
+            cp -r "$DEVICE_APP" artifacts/
+            echo "Copied device app: $DEVICE_APP"
+          fi
+          
+          # Copy simulator build
+          SIM_APP=$(find ./DerivedDataSim -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$SIM_APP" ]; then
+            cp -r "$SIM_APP" artifacts/
+            echo "Copied sim app: $SIM_APP"
+          fi
+          
+          echo "=== Artifacts ==="
+          ls -la artifacts/
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: build-output
-          path: |
-            DerivedDataSim/Build/Products/
-          retention-days: 7
+          name: ApexGameOptimizer-iOS
+          path: artifacts/
+          retention-days: 30
           if-no-files-found: warn
