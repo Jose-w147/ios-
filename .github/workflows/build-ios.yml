@@ -18,15 +18,37 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Build
+      - name: Show generated files
         run: |
+          echo "=== xcodeproj ==="
+          ls -la *.xcodeproj/
+          echo "=== xcschemes ==="
+          ls -la *.xcodeproj/xcshareddata/xcschemes/ 2>/dev/null || echo "No shared schemes"
+          echo "=== Source files ==="
+          find . -name "*.swift" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | grep -v ".git" | sort
+
+      - name: Build
+        shell: bash
+        run: |
+          set -o pipefail
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath ./DerivedData \
-            build 2>&1 | tee build.log; exit ${PIPESTATUS[0]}
+            build 2>&1 | tee build.log
+          echo "Exit code: $?"
+
+      - name: Tail build log errors
+        if: always()
+        run: |
+          echo "=== LAST 100 LINES ==="
+          tail -100 build.log 2>/dev/null || echo "No build.log"
+          echo "=== ERRORS ==="
+          grep -i "error:" build.log 2>/dev/null | head -30 || echo "No errors found"
+          echo "=== FAILURES ==="
+          grep -i "failure\|failed" build.log 2>/dev/null | head -10 || echo "No failures found"
 
       - name: Upload Build Log
         uses: actions/upload-artifact@v4
@@ -56,7 +78,6 @@ jobs:
         if: always()
         with:
           name: ApexGameOptimizer-iOS
-          path: |
-            ApexGameOptimizer.ipa
+          path: ApexGameOptimizer.ipa
           retention-days: 30
           if-no-files-found: warn
