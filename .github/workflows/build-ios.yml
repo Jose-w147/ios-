@@ -9,81 +9,120 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14  # Apple Silicon runner (M1)
+    runs-on: macos-14
     
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_15.2.app
-
       - name: Install XcodeGen
         run: brew install xcodegen
 
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: List project files
+      - name: Debug - List source files
         run: |
-          echo "=== Xcode Project ==="
-          ls -la *.xcodeproj
+          echo "=== All files ==="
+          find . -type f | head -50
           echo ""
-          echo "=== Source files ==="
-          find . -name "*.swift" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | head -30
+          echo "=== project.yml ==="
+          cat project.yml
 
-      - name: Build for iPhone 8 (arm64)
+      - name: Generate Xcode Project
         run: |
+          xcodegen generate --spec project.yml
+          echo "=== Generated project ==="
+          ls -la *.xcodeproj
+
+      - name: Debug - List project structure
+        run: |
+          find . -name "*.swift" -o -name "*.cpp" -o -name "*.hpp" -o -name "*.h" | sort
+
+      - name: Build for Device (Release)
+        id: build_device
+        run: |
+          set -e
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -derivedDataPath build \
+            -derivedDataPath ./DerivedData \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            | xcpretty
+            ALWAYS_SEARCH_USER_PATHS=YES \
+            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
+            CLANG_CXX_LIBRARY="libc++" \
+            2>&1 | tee build_device.log
+          
+          echo "=== Build device output (last 50 lines) ==="
+          tail -50 build_device.log
+          
+          echo "=== Finding .app bundles ==="
+          find ./DerivedData -name "*.app" -type d
 
-      - name: Build for Simulator (for testing)
+      - name: Build for Simulator (Debug)
+        id: build_sim
+        if: success() || failure()
         run: |
+          set -e
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 15' \
-            -derivedDataPath build-sim \
-            | xcpretty
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -derivedDataPath ./DerivedDataSim \
+            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
+            CLANG_CXX_LIBRARY="libc++" \
+            2>&1 | tee build_sim.log
+          
+          echo "=== Build sim output (last 50 lines) ==="
+          tail -50 build_sim.log
+          
+          echo "=== Finding .app bundles ==="
+          find ./DerivedDataSim -name "*.app" -type d
 
-      - name: Create IPA directory
+      - name: Package artifacts
+        id: package
+        if: always()
         run: |
-          mkdir -p build/ipa
-          if [ -d "build/Build/Products/Release-iphoneos" ]; then
-            cp -r build/Build/Products/Release-iphoneos/*.app build/ipa/
+          mkdir -p artifacts
+          
+          # Device build
+          DEVICE_APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$DEVICE_APP" ]; then
+            echo "Found device app: $DEVICE_APP"
+            cp -r "$DEVICE_APP" artifacts/
+          else
+            echo "No device .app found"
           fi
+          
+          # Simulator build
+          SIM_APP=$(find ./DerivedDataSim -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$SIM_APP" ]; then
+            echo "Found simulator app: $SIM_APP"
+            cp -r "$SIM_APP" artifacts/
+          else
+            echo "No simulator .app found"
+          fi
+          
+          echo "=== Artifacts ==="
+          ls -la artifacts/
 
-      - name: Upload IPA artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: ApexGameOptimizer-iOS
-          path: build/ipa/
+          path: artifacts/
           retention-days: 30
+          if-no-files-found: warn
 
-      - name: Build Summary
-        run: |
-          echo "=========================================="
-          echo "✅ BUILD iOS CONCLUÍDO COM SUCESSO!"
-          echo "=========================================="
-          echo ""
-          echo "📱 iPhone 8 (A11 Bionic, 2GB RAM) ✅"
-          echo "📱 iPhone X ou superior ✅"
-          echo ""
-          echo "🎯 Para instalar no iPhone:"
-          echo "1. Baixe o artifact ApexGameOptimizer-iOS"
-          echo "2. Use o AltStore ou Sideloadly para instalar"
-          echo "3. Ou abra no Xcode e faça Deploy"
-          echo ""
-          echo "📊 Arquitetura: arm64 (Apple A11+)"
-          echo "⚙️ C++ Standard: C++20"
-          echo "🔧 SIMD: ARM NEON"
-          echo "=========================================="
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-logs
+          path: |
+            build_device.log
+            build_sim.log
+          retention-days: 7
