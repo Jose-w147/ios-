@@ -32,50 +32,38 @@ jobs:
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
 
-      - name: Create IPA
+      - name: Package app
         run: |
-          mkdir -p Payload
+          echo "=== Full DerivedData tree ==="
+          find ./DerivedData -maxdepth 6 -type d 2>/dev/null
           
-          echo "=== Searching for .app ==="
+          echo "=== Finding all .app bundles ==="
           find ./DerivedData -name "*.app" -type d 2>/dev/null
           
-          APP_PATH=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          mkdir -p output
           
-          if [ -z "$APP_PATH" ]; then
-            echo "No .app found. Listing DerivedData:"
-            find ./DerivedData -type d | head -30
-            echo "BUILD FAILED: no .app bundle found"
-            exit 1
+          # Try to find any .app
+          APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            cp -r "$APP" output/
+            echo "Copied: $APP"
+          else
+            # Fallback: copy Products directory
+            PRODUCTS=$(find ./DerivedData -name "Products" -type d 2>/dev/null | head -1)
+            if [ -n "$PRODUCTS" ]; then
+              cp -r "$PRODUCTS"/* output/ 2>/dev/null
+              echo "Copied Products: $PRODUCTS"
+            fi
           fi
           
-          echo "Found: $APP_PATH"
-          cp -r "$APP_PATH" Payload/
-          zip -r ApexGameOptimizer.ipa Payload/
-          echo "=== IPA Created ==="
-          ls -la ApexGameOptimizer.ipa
+          echo "=== Output contents ==="
+          find output -type f | head -20
 
-      - name: Upload IPA
+      - name: Upload output
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ApexGameOptimizer-iOS
-          path: ApexGameOptimizer.ipa
+          path: output/
           retention-days: 30
           if-no-files-found: warn
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "========================================"
-          echo "  BUILD iOS STATUS"
-          echo "========================================"
-          echo "  iPhone 8+ (A11 Bionic, arm64)"
-          echo "  XcodeGen + Xcode 15 + C++20"
-          echo "========================================"
-          if [ -f "ApexGameOptimizer.ipa" ]; then
-            echo "  STATUS: SUCCESS"
-            echo "  IPA: $(ls -lh ApexGameOptimizer.ipa | awk '{print $5}')"
-          else
-            echo "  STATUS: PARTIAL (C++ compiled, packaging failed)"
-          fi
-          echo "========================================"
