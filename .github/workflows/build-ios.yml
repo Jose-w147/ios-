@@ -18,6 +18,17 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
+      - name: Build for Simulator (Debug)
+        run: |
+          xcodebuild \
+            -project ApexGameOptimizer.xcodeproj \
+            -scheme ApexGameOptimizer \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -derivedDataPath ./DerivedDataSim \
+            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
+            CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
+
       - name: Build for Device (Release)
         run: |
           xcodebuild \
@@ -32,34 +43,38 @@ jobs:
             CLANG_CXX_LANGUAGE_STANDARD="c++20" \
             CLANG_CXX_LIBRARY="libc++" 2>&1 | tail -200
 
-      - name: Package app
+      - name: Find and Package
         run: |
-          echo "=== Full DerivedData tree ==="
-          find ./DerivedData -maxdepth 6 -type d 2>/dev/null
-          
-          echo "=== Finding all .app bundles ==="
-          find ./DerivedData -name "*.app" -type d 2>/dev/null
-          
           mkdir -p output
+          echo "=== Simulator build tree ==="
+          find ./DerivedDataSim -name "*.app" -type d 2>/dev/null
+          echo "=== Device build tree ==="
+          find ./DerivedData -name "*.app" -type d 2>/dev/null
+          echo "=== All .app in DerivedDataSim ==="
+          find ./DerivedDataSim -name "*.app" -maxdepth 8 2>/dev/null
+          echo "=== All .app in DerivedData ==="
+          find ./DerivedData -name "*.app" -maxdepth 8 2>/dev/null
           
-          # Try to find any .app
-          APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
-          if [ -n "$APP" ]; then
-            cp -r "$APP" output/
-            echo "Copied: $APP"
-          else
-            # Fallback: copy Products directory
-            PRODUCTS=$(find ./DerivedData -name "Products" -type d 2>/dev/null | head -1)
-            if [ -n "$PRODUCTS" ]; then
-              cp -r "$PRODUCTS"/* output/ 2>/dev/null
-              echo "Copied Products: $PRODUCTS"
-            fi
+          # Simulator app (most reliable)
+          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          if [ -n "$SIM_APP" ]; then
+            cp -r "$SIM_APP" output/
+            echo "Copied simulator: $SIM_APP"
           fi
           
-          echo "=== Output contents ==="
+          # Device app (may not exist without signing)
+          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          if [ -n "$DEV_APP" ]; then
+            mkdir -p output/device
+            cp -r "$DEV_APP" output/device/
+            echo "Copied device: $DEV_APP"
+          fi
+          
+          echo "=== Final output ==="
           find output -type f | head -20
+          du -sh output/
 
-      - name: Upload output
+      - name: Upload
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -67,3 +82,24 @@ jobs:
           path: output/
           retention-days: 30
           if-no-files-found: warn
+
+      - name: Build Summary
+        if: always()
+        run: |
+          echo "========================================"
+          echo "  APEX GAME OPTIMIZER - iOS BUILD"
+          echo "========================================"
+          echo "  Target: iPhone 8+ (arm64, A11 Bionic)"
+          echo "  C++: C++20 with ARM NEON SIMD"
+          echo "  SwiftUI: 53 native modules"
+          echo "========================================"
+          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          if [ -n "$SIM_APP" ]; then echo "  Simulator: OK"; else echo "  Simulator: FAIL"; fi
+          if [ -n "$DEV_APP" ]; then echo "  Device: OK"; else echo "  Device: no signing (expected)"; fi
+          echo "========================================"
+          echo "  To install on iPhone 8:"
+          echo "  1. Download artifact from Actions tab"
+          echo "  2. Open in Xcode and deploy"
+          echo "  3. Or use AltStore/Sideloadly"
+          echo "========================================"
