@@ -20,70 +20,30 @@ jobs:
 
       - name: Build for Simulator
         run: |
-          set -e
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
-<<<<<<< Updated upstream
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath ./build \
-            CLANG_CXX_LANGUAGE_STANDARD="c++20" \
-            CLANG_CXX_LIBRARY="libc++" \
-            clean build 2>&1 | tail -30
-
-      - name: Find .app
-        run: |
-          echo "=== Full build tree ==="
-          find ./build -name "*.app" 2>/dev/null || echo "no .app found"
-          echo "=== Products ==="
-          find ./build/Build/Products -type f 2>/dev/null | head -20 || echo "no products"
-          echo "=== All dirs ==="
-          find ./build/Build/Products -type d 2>/dev/null || echo "no dirs"
-
-      - name: Create IPA
-        run: |
-          mkdir -p Payload
-          APP=$(find ./build -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1 || true)
-          if [ -n "$APP" ]; then
-            cp -r "$APP" Payload/
-            zip -r ApexGameOptimizer.ipa Payload/
-            echo "IPA CREATED: $(ls -lh ApexGameOptimizer.ipa)"
-          else
-            echo "NO .app FOUND - listing full tree:"
-            find ./build -type f 2>/dev/null | head -50
-=======
             -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
             -derivedDataPath ./DerivedData \
-            build 2>&1 | tee build.log || true
-          
-          echo "=== Build log errors ==="
-          grep -i "error:" build.log | head -20 || true
-          
-          echo "=== Find .app ==="
-          APP_PATH=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
-          if [ -z "$APP_PATH" ]; then
-            echo "ERROR: .app not found. Listing DerivedData structure:"
-            find ./DerivedData -maxdepth 5 -type d 2>/dev/null
-            exit 1
->>>>>>> Stashed changes
-          fi
-          echo "Found .app at: $APP_PATH"
-          echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
+            build 2>&1 | tee build.log
+          echo "=== Build errors ==="
+          grep -i "error:" build.log | head -30 || echo "No errors found"
 
-      - name: Package IPA
+      - name: Find and Package .app
         run: |
-          set -e
-          if [ -z "$APP_PATH" ]; then
-            echo "No APP_PATH set, skipping"
+          echo "=== Searching for .app ==="
+          APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            echo "ERROR: .app not found"
+            find ./DerivedData -maxdepth 6 -type d 2>/dev/null
             exit 1
           fi
-          
+          echo "Found: $APP"
           mkdir -p Payload
-          cp -r "$APP_PATH" Payload/
+          cp -r "$APP" Payload/
           zip -r ApexGameOptimizer.ipa Payload/
-          echo "IPA created:"
+          echo "=== IPA Created ==="
           ls -lh ApexGameOptimizer.ipa
 
       - name: Upload IPA
