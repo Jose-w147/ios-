@@ -4,17 +4,17 @@
 #import <Foundation/Foundation.h>
 
 // C++ function declarations accessible from Swift via bridging header
-// These map to the native_bridge.cpp JNI functions, adapted for iOS
+// Suffix _raw to avoid Swift method name conflicts
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // Hardware & System
-int getSystemCores(void);
-const char* getSystemMetrics(void);
-const char* runRamCacheBenchmark(void);
-const char* runSystemDiagnosticTest(void);
+int getSystemCores_raw(void);
+const char* getSystemMetrics_raw(void);
+const char* runRamCacheBenchmark_raw(void);
+const char* runSystemDiagnosticTest_raw(void);
 
 // Gyroscope
 void updateGyro360(float gx, float gy, float gz, float dt);

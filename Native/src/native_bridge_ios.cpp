@@ -9,12 +9,12 @@ extern "C" {
 
 // === Hardware & System ===
 
-int getSystemCores(void) {
+int getSystemCores_raw(void) {
     unsigned int cores = std::thread::hardware_concurrency();
     return (cores > 0) ? static_cast<int>(cores) : 1;
 }
 
-const char* getSystemMetrics(void) {
+const char* getSystemMetrics_raw(void) {
     static thread_local std::string r;
     auto stats = Optimizer::getHardwareStats();
     auto pm = Optimizer::getProcessMemoryStats();
@@ -29,7 +29,7 @@ const char* getSystemMetrics(void) {
     return r.c_str();
 }
 
-const char* runRamCacheBenchmark(void) {
+const char* runRamCacheBenchmark_raw(void) {
     static thread_local std::string r;
     Optimizer::MemoryArena arena(2 * 1024 * 1024);
     arena.allocate(1024);
@@ -45,7 +45,7 @@ const char* runRamCacheBenchmark(void) {
     return r.c_str();
 }
 
-const char* runSystemDiagnosticTest(void) {
+const char* runSystemDiagnosticTest_raw(void) {
     static thread_local std::string r;
     auto s = Optimizer::runSystemDiagnostic();
     std::ostringstream ss;

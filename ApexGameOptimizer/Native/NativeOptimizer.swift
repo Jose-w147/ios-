@@ -17,21 +17,21 @@ class NativeOptimizer {
     // MARK: - Hardware & System
     
     func getSystemCores() -> Int {
-        return getSystemCores()
+        return Int(getSystemCores_raw())
     }
     
     func getSystemMetrics() -> String {
-        guard let cStr = getSystemMetrics() else { return "Motor nativo não carregado" }
+        guard let cStr = getSystemMetrics_raw() else { return "Motor nativo não carregado" }
         return String(cString: cStr)
     }
     
     func runRamCacheBenchmark() -> String {
-        guard let cStr = runRamCacheBenchmark() else { return "Erro" }
+        guard let cStr = runRamCacheBenchmark_raw() else { return "Erro" }
         return String(cString: cStr)
     }
     
     func runSystemDiagnosticTest() -> String {
-        guard let cStr = runSystemDiagnosticTest() else { return "Erro" }
+        guard let cStr = runSystemDiagnosticTest_raw() else { return "Erro" }
         return String(cString: cStr)
     }
     
@@ -55,7 +55,7 @@ class NativeOptimizer {
         guard isLoaded else { return "Motor nativo não carregado" }
         
         switch id {
-        case 0: return callStr { runRamCacheBenchmark() }
+        case 0: return callStr { runRamCacheBenchmark_raw() }
         case 1: return callStr { runLeadPredictionTest(15.0, 5.0, 2.0, 2.5, 0.5, 0.0) }
         case 2: return callStr { runKalmanFilterTest(500.0, 600.0, 12.0, 15.0) }
         case 3: return callStr { runElevationAngleTest(30.0) }

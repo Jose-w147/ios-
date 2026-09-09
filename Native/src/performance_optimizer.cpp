@@ -1095,8 +1095,8 @@ namespace Optimizer {
     }
 
     void QuantumNeuralNet::forward(const float inputs[INPUT_SIZE], float outputs[OUTPUT_SIZE]) {
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-        // Hidden layer: hidden = ReLU(inputs × weights_ih + bias_h)
+#if defined(__aarch64__)
+        // ARM64: use FMA + horizontal add (ARMv8-A only)
         for (int j = 0; j < HIDDEN_SIZE; ++j) {
             float32x4_t acc = vdupq_n_f32(bias_h[j]);
             int k = 0;
@@ -1111,7 +1111,6 @@ namespace Optimizer {
             hiddenBuffer[j] = reluf(sum);
         }
 
-        // Output layer: output = sigmoid(hidden × weights_ho + bias_o)
         for (int j = 0; j < OUTPUT_SIZE; ++j) {
             float32x4_t acc = vdupq_n_f32(bias_o[j]);
             int k = 0;
@@ -1121,6 +1120,41 @@ namespace Optimizer {
                 acc = vfmaq_f32(acc, vh, vw);
             }
             float sum = vaddvq_f32(acc);
+            for (; k < HIDDEN_SIZE; ++k)
+                sum += hiddenBuffer[k] * weights_ho[j * HIDDEN_SIZE + k];
+            outputs[j] = sigmoidf(sum);
+        }
+#elif defined(__ARM_NEON) || defined(__ARM_NEON__)
+        // ARMv7 (32-bit): use vmlaq_f32 + manual horizontal sum
+        auto hadd_f32 = [](float32x4_t v) -> float {
+            float32x2_t lo = vget_low_f32(v);
+            float32x2_t hi = vget_high_f32(v);
+            float32x2_t sum = vadd_f32(lo, hi);
+            return vget_lane_f32(vpmax_f32(sum, sum), 0);
+        };
+        for (int j = 0; j < HIDDEN_SIZE; ++j) {
+            float32x4_t acc = vdupq_n_f32(bias_h[j]);
+            int k = 0;
+            for (; k <= INPUT_SIZE - 4; k += 4) {
+                float32x4_t vi = vld1q_f32(inputs + k);
+                float32x4_t vw = vld1q_f32(weights_ih + j * INPUT_SIZE + k);
+                acc = vmlaq_f32(acc, vi, vw);
+            }
+            float sum = hadd_f32(acc);
+            for (; k < INPUT_SIZE; ++k)
+                sum += inputs[k] * weights_ih[j * INPUT_SIZE + k];
+            hiddenBuffer[j] = reluf(sum);
+        }
+
+        for (int j = 0; j < OUTPUT_SIZE; ++j) {
+            float32x4_t acc = vdupq_n_f32(bias_o[j]);
+            int k = 0;
+            for (; k <= HIDDEN_SIZE - 4; k += 4) {
+                float32x4_t vh = vld1q_f32(hiddenBuffer + k);
+                float32x4_t vw = vld1q_f32(weights_ho + j * HIDDEN_SIZE + k);
+                acc = vmlaq_f32(acc, vh, vw);
+            }
+            float sum = hadd_f32(acc);
             for (; k < HIDDEN_SIZE; ++k)
                 sum += hiddenBuffer[k] * weights_ho[j * HIDDEN_SIZE + k];
             outputs[j] = sigmoidf(sum);
