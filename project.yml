@@ -10,7 +10,6 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.9"
-    CPLUSPLUS_STANDARD: "c++20"
     CLANG_CXX_LANGUAGE_STANDARD: "c++20"
     CLANG_CXX_LIBRARY: "libc++"
     GCC_PREPROCESSOR_DEFINITIONS:
@@ -25,15 +24,13 @@ targets:
     platform: iOS
     deploymentTarget: "14.0"
     sources:
-      - path: ApexGameOptimizer
-        excludes:
-          - "**/*.xcassets"
+      - path: ApexGameOptimizer/ContentView.swift
+      - path: ApexGameOptimizer/Models
+      - path: ApexGameOptimizer/ViewModel
+      - path: ApexGameOptimizer/Views
+      - path: ApexGameOptimizer/Native/NativeOptimizer.swift
+      - path: ApexGameOptimizer/Services
       - path: Native/src
-        type: group
-      - path: Native
-        excludes:
-          - "src/**"
-        type: group
     resources:
       - path: ApexGameOptimizer/Resources
     settings:
@@ -48,13 +45,10 @@ targets:
         OTHER_LDFLAGS:
           - "-lc++"
         HEADER_SEARCH_PATHS:
+          - "$(SRCROOT)/Native/src"
           - "$(SRCROOT)/Native"
-          - "$(SRCROOT)/src"
+          - "$(SRCROOT)/ApexGameOptimizer/Native"
     dependencies: []
-    scheme:
-      testTargets: []
-    preBuildScripts: []
-    postBuildScripts: []
 
 schemes:
   ApexGameOptimizer:
@@ -64,11 +58,8 @@ schemes:
       parallelizableBuild: true
     run:
       config: Debug
-      environmentVariables: []
     test:
       config: Debug
-      targets:
-        - ApexGameOptimizer
     profile:
       config: Release
     analyze:
