@@ -47,32 +47,32 @@ jobs:
         run: |
           mkdir -p output
           echo "=== Simulator build tree ==="
-          find ./DerivedDataSim -name "*.app" -type d 2>/dev/null
+          find ./DerivedDataSim -name "*.app" 2>/dev/null || true
           echo "=== Device build tree ==="
-          find ./DerivedData -name "*.app" -type d 2>/dev/null
-          echo "=== All .app in DerivedDataSim ==="
-          find ./DerivedDataSim -name "*.app" -maxdepth 8 2>/dev/null
-          echo "=== All .app in DerivedData ==="
-          find ./DerivedData -name "*.app" -maxdepth 8 2>/dev/null
+          find ./DerivedData -name "*.app" 2>/dev/null || true
           
-          # Simulator app (most reliable)
-          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          # Simulator app
+          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
           if [ -n "$SIM_APP" ]; then
             cp -r "$SIM_APP" output/
             echo "Copied simulator: $SIM_APP"
+          else
+            echo "No simulator .app found"
           fi
           
-          # Device app (may not exist without signing)
-          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          # Device app
+          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
           if [ -n "$DEV_APP" ]; then
             mkdir -p output/device
             cp -r "$DEV_APP" output/device/
             echo "Copied device: $DEV_APP"
+          else
+            echo "No device .app found"
           fi
           
           echo "=== Final output ==="
-          find output -type f | head -20
-          du -sh output/
+          ls -la output/ 2>/dev/null || echo "output dir empty"
+          find output -type f 2>/dev/null || true
 
       - name: Upload
         uses: actions/upload-artifact@v4
@@ -93,8 +93,8 @@ jobs:
           echo "  C++: C++20 with ARM NEON SIMD"
           echo "  SwiftUI: 53 native modules"
           echo "========================================"
-          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
-          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          SIM_APP=$(find ./DerivedDataSim -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
+          DEV_APP=$(find ./DerivedData -name "ApexGameOptimizer.app" 2>/dev/null | head -1 || true)
           if [ -n "$SIM_APP" ]; then echo "  Simulator: OK"; else echo "  Simulator: FAIL"; fi
           if [ -n "$DEV_APP" ]; then echo "  Device: OK"; else echo "  Device: no signing (expected)"; fi
           echo "========================================"
