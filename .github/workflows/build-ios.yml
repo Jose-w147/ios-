@@ -18,25 +18,16 @@ jobs:
       - name: Generate Project
         run: xcodegen generate --spec project.yml
 
-      - name: Debug
-        run: |
-          echo "=== xcodeproj ==="
-          ls -la *.xcodeproj/ 2>&1
-          echo "=== xcshareddata ==="
-          find *.xcodeproj -type f 2>&1 | head -30
-          echo "=== xcodebuild list ==="
-          xcodebuild -project ApexGameOptimizer.xcodeproj -list 2>&1 || echo "FAILED"
-          echo "=== xcode version ==="
-          xcodebuild -version 2>&1
+      - name: List simulators
+        run: xcrun simctl list devices available | grep -i iphone | head -10
 
       - name: Build
-        continue-on-error: true
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
             -scheme ApexGameOptimizer \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
             -derivedDataPath ./DerivedData \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
@@ -46,5 +37,38 @@ jobs:
       - name: Find .app
         if: always()
         run: |
-          find ./DerivedData -name "*.app" -type d 2>/dev/null || echo "No .app"
-          find ./DerivedData/Build/Products -type d 2>/dev/null | head -20 || echo "No products"
+          echo "=== ALL .app ==="
+          find ./DerivedData -name "*.app" 2>/dev/null || echo "none"
+          echo "=== Products ==="
+          find ./DerivedData/Build/Products -type d 2>/dev/null | head -30 || echo "none"
+
+      - name: Package IPA
+        if: always()
+        run: |
+          APP=$(find ./DerivedData -name "ApexGameOptimizer.app" -type d 2>/dev/null | head -1)
+          if [ -n "$APP" ]; then
+            echo "Found: $APP"
+            mkdir -p Payload
+            cp -r "$APP" Payload/
+            zip -r ApexGameOptimizer.ipa Payload/
+            ls -lh ApexGameOptimizer.ipa
+          else
+            echo "No .app - trying all apps"
+            APP2=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
+            if [ -n "$APP2" ]; then
+              echo "Found generic: $APP2"
+              mkdir -p Payload
+              cp -r "$APP2" Payload/
+              zip -r ApexGameOptimizer.ipa Payload/
+              ls -lh ApexGameOptimizer.ipa
+            fi
+          fi
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ApexGameOptimizer-iOS
+          path: ApexGameOptimizer.ipa
+          retention-days: 30
+          if-no-files-found: warn
