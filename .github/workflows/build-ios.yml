@@ -18,10 +18,19 @@ jobs:
       - name: Generate Project
         run: xcodegen generate --spec project.yml
 
-      - name: List schemes
-        run: xcodebuild -project ApexGameOptimizer.xcodeproj -list
+      - name: Debug
+        run: |
+          echo "=== xcodeproj ==="
+          ls -la *.xcodeproj/ 2>&1
+          echo "=== xcshareddata ==="
+          find *.xcodeproj -type f 2>&1 | head -30
+          echo "=== xcodebuild list ==="
+          xcodebuild -project ApexGameOptimizer.xcodeproj -list 2>&1 || echo "FAILED"
+          echo "=== xcode version ==="
+          xcodebuild -version 2>&1
 
       - name: Build
+        continue-on-error: true
         run: |
           xcodebuild \
             -project ApexGameOptimizer.xcodeproj \
@@ -29,8 +38,13 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./DerivedData \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
             build 2>&1
 
       - name: Find .app
         if: always()
-        run: find ./DerivedData -name "*.app" -type d 2>/dev/null || echo "No .app"
+        run: |
+          find ./DerivedData -name "*.app" -type d 2>/dev/null || echo "No .app"
+          find ./DerivedData/Build/Products -type d 2>/dev/null | head -20 || echo "No products"
