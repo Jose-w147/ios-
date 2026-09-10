@@ -18,18 +18,8 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate --spec project.yml
 
-      - name: Debug Project
-        run: |
-          echo "=== xcodeproj ==="
-          ls -la *.xcodeproj/ 2>/dev/null || echo "NO xcodeproj"
-          echo "=== xcschemes ==="
-          find . -name "*.xcscheme" 2>/dev/null || echo "No xcschemes"
-          echo "=== Source files ==="
-          find . -name "*.swift" -not -path "./.git/*" 2>/dev/null | head -20
-          find . -name "*.cpp" -not -path "./.git/*" 2>/dev/null | head -20
-          find . -name "*.h" -not -path "./.git/*" 2>/dev/null | head -20
-          echo "=== xcodebuild -list ==="
-          xcodebuild -project *.xcodeproj -list 2>&1
+      - name: List schemes
+        run: xcodebuild -project ApexGameOptimizer.xcodeproj -list 2>&1 || true
 
       - name: Build
         run: |
@@ -39,18 +29,16 @@ jobs:
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./DerivedData \
-            build > build.log 2>&1 ; echo "EXIT=$?" > exit_code.txt
+            build > build.log 2>&1
+          echo "EXIT=$?" > exit_code.txt
 
       - name: Show results
         if: always()
         run: |
           cat exit_code.txt 2>/dev/null
-          echo "=== LAST 100 LINES ==="
           tail -100 build.log 2>/dev/null
-          echo "=== ERRORS ==="
-          grep -i "error:" build.log 2>/dev/null | head -50
 
-      - name: Upload Build Log
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,7 +54,6 @@ jobs:
         run: |
           APP=$(find ./DerivedData -name "*.app" -type d 2>/dev/null | head -1)
           if [ -n "$APP" ]; then
-            echo "Found: $APP"
             mkdir -p Payload
             cp -r "$APP" Payload/
             zip -r ApexGameOptimizer.ipa Payload/
